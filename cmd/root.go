@@ -21,6 +21,11 @@ var rootCmd = &cobra.Command{
 	Long:  "A dino tool",
 }
 
+func init() {
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: ./.conf.yaml or dino/.conf.yaml)")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
@@ -28,6 +33,7 @@ func Execute() {
 	cobra.OnInitialize(initConfig)
 	// Register subcommands.
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(runCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		color.New(color.FgRed, color.Bold).Fprintln(os.Stderr, err)

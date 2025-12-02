@@ -2,6 +2,7 @@ package conf
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -14,8 +15,14 @@ var k = koanf.New(".")
 
 // Config holds all configuration for the application.
 type Config struct {
-	Provider string `koanf:"provider"`
-	Model    string `koanf:"model"`
+	Provider    string  `koanf:"provider"`
+	Model       string  `koanf:"model"`
+	Stream      bool    `koanf:"stream"`
+	Input       string  `koanf:"input"`
+	Output      string  `koanf:"output"`
+	Prompt      string  `koanf:"prompt"`
+	Temperature string  `koanf:"temperature"`
+	TopP        string  `koanf:"topP"`
 }
 
 // Init initializes the configuration from file and environment variables.
@@ -24,6 +31,21 @@ func Init(configFile string) error {
 	if configFile != "" {
 		if err := k.Load(file.Provider(configFile), yaml.Parser()); err != nil {
 			return fmt.Errorf("error loading config file: %w", err)
+		}
+	} else {
+		// Try default locations if no explicit config file is provided
+		candidates := []string{
+			".conf.yaml",
+			"./.conf.yaml",
+			"dino/.conf.yaml",
+			"./dino/.conf.yaml",
+		}
+		for _, p := range candidates {
+			if _, err := os.Stat(p); err == nil {
+				// Best-effort load; ignore the error here to still allow ENV overrides
+				_ = k.Load(file.Provider(p), yaml.Parser())
+				break
+			}
 		}
 	}
 
