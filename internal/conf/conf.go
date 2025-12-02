@@ -15,14 +15,15 @@ var k = koanf.New(".")
 
 // Config holds all configuration for the application.
 type Config struct {
-	Provider    string  `koanf:"provider"`
-	Model       string  `koanf:"model"`
-	Stream      bool    `koanf:"stream"`
-	Input       string  `koanf:"input"`
-	Output      string  `koanf:"output"`
-	Prompt      string  `koanf:"prompt"`
-	Temperature string  `koanf:"temperature"`
-	TopP        string  `koanf:"topP"`
+	Provider    string   `koanf:"provider"`
+	Model       string   `koanf:"model"`
+	Stream      bool     `koanf:"stream"`
+	Input       string   `koanf:"input"`
+	Output      string   `koanf:"output"`
+	Classes     []string `koanf:"classes"`
+	Prompt      string   `koanf:"prompt"`
+	Temperature string   `koanf:"temperature"`
+	TopP        string   `koanf:"topP"`
 }
 
 // Init initializes the configuration from file and environment variables.
@@ -35,10 +36,10 @@ func Init(configFile string) error {
 	} else {
 		// Try default locations if no explicit config file is provided
 		candidates := []string{
-			".conf.yaml",
-			"./.conf.yaml",
-			"dino/.conf.yaml",
-			"./dino/.conf.yaml",
+			"conf.yaml",
+			"./conf.yaml",
+			"dino/conf.yaml",
+			"./dino/conf.yaml",
 		}
 		for _, p := range candidates {
 			if _, err := os.Stat(p); err == nil {

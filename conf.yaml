@@ -1,7 +1,7 @@
 provider: ollama
 model: qwen3-vl:32b
-temperature: 0.2
-topP: 0.9
+temperature: 0.6
+topP: 0.95
 stream: true
 input: 'inputs'
 output: 'outputs'

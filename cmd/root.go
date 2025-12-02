@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: ./.conf.yaml or dino/.conf.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: ./conf.yaml or dino/conf.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 }
 
@@ -34,6 +34,7 @@ func Execute() {
 	// Register subcommands.
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(confCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		color.New(color.FgRed, color.Bold).Fprintln(os.Stderr, err)

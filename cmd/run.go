@@ -33,6 +33,41 @@ var (
 	outputDir string
 )
 
+// defaultPalette defines a set of distinct colors assigned to classes by order.
+var defaultPalette = []color.RGBA{
+	{0, 255, 0, 255},     // green
+	{255, 0, 0, 255},     // red
+	{0, 0, 255, 255},     // blue
+	{255, 255, 0, 255},   // yellow
+	{255, 0, 255, 255},   // magenta
+	{0, 255, 255, 255},   // cyan
+	{255, 165, 0, 255},   // orange
+	{128, 0, 128, 255},   // purple
+	{255, 105, 180, 255}, // pink
+	{0, 128, 0, 255},     // dark green
+}
+
+// colorForLabel returns a deterministic color for a given label.
+// - If the label exists in cfg.Classes (case-insensitive), color is assigned by its index.
+// - Otherwise, a stable hash of the label selects a color from the palette.
+func colorForLabel(label string, classes []string) color.RGBA {
+	if strings.TrimSpace(label) == "" {
+		return color.RGBA{255, 255, 255, 255} // white for empty label
+	}
+	lower := strings.ToLower(strings.TrimSpace(label))
+	for i, c := range classes {
+		if strings.ToLower(strings.TrimSpace(c)) == lower {
+			return defaultPalette[i%len(defaultPalette)]
+		}
+	}
+	// fallback: stable hash by summing bytes, deterministic across runs
+	sum := 0
+	for i := 0; i < len(lower); i++ {
+		sum += int(lower[i])
+	}
+	return defaultPalette[sum%len(defaultPalette)]
+}
+
 // runCmd proxies to the configured provider. For provider=ollama, it calls the Ollama HTTP API
 //
 //	POST $OLLAMA_HOST/api/generate with stream=true/false
@@ -157,9 +192,11 @@ var runCmd = &cobra.Command{
 					Messages: []api.Message{
 						{Role: "user", Content: currentPrompt, Images: []api.ImageData{api.ImageData(imgBytes)}},
 					},
+					Think: &api.ThinkValue{Value: false},
 					Options: map[string]any{
-						"temperature": temp,
-						"top_p":       topP,
+						"enable_thinking": false,
+						"temperature":     temp,
+						"top_p":           topP,
 					},
 				}
 				if !stream {
@@ -263,10 +300,7 @@ var runCmd = &cobra.Command{
 					y1 = utils.Clamp(y1, bounds.Min.Y, bounds.Max.Y-1)
 					y2 = utils.Clamp(y2, bounds.Min.Y, bounds.Max.Y-1)
 
-					col := color.RGBA{0, 255, 0, 255} // green default
-					if strings.ToLower(label) == "climb" {
-						col = color.RGBA{255, 0, 0, 255} // red for climb
-					}
+					col := colorForLabel(label, cfg.Classes)
 					utils.DrawRect(dst, x1, y1, x2, y2, col, 3)
 				}
 
