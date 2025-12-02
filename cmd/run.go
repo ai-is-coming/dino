@@ -302,6 +302,9 @@ var runCmd = &cobra.Command{
 
 					col := colorForLabel(label, cfg.Classes)
 					utils.DrawRect(dst, x1, y1, x2, y2, col, 3)
+					// draw label text on a colored background near the top-left corner of the box
+					bg := color.RGBA{R: col.R, G: col.G, B: col.B, A: 200}
+					utils.DrawLabel(dst, x1, y1, label, color.RGBA{255, 255, 255, 255}, bg)
 				}
 
 				// Save annotated image to outputs/bbox with same base name & extension

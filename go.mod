@@ -12,6 +12,7 @@ require (
 	github.com/ollama/ollama v0.13.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/cobra v1.8.0
+	golang.org/x/image v0.22.0
 )
 
 require (

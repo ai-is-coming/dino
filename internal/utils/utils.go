@@ -3,10 +3,14 @@ package utils
 import (
 	"image"
 	"image/color"
+	draw "image/draw"
 	"path/filepath"
 	"strings"
 
 	"github.com/shopspring/decimal"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
 
 // Clamp bounds v into [lo, hi].
@@ -94,4 +98,45 @@ func DenormalizeBbox999(x1s, y1s, x2s, y2s string, width, height int) (int, int,
 	y1 = Clamp(y1, 0, maxY)
 	y2 = Clamp(y2, 0, maxY)
 	return x1, y1, x2, y2
+}
+
+// DrawLabel draws a text label near the top-left of a bounding box with a colored background.
+// x,y are the top-left corner of the bbox.
+func DrawLabel(img *image.RGBA, x, y int, label string, fg color.Color, bg color.Color) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return
+	}
+
+	face := basicfont.Face7x13
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(fg),
+		Face: face,
+	}
+
+	textWidth := d.MeasureString(label).Ceil()
+	m := face.Metrics()
+	ascent := m.Ascent.Ceil()
+	height := m.Height.Ceil()
+
+	// Place background rectangle just above the top edge of the bbox.
+	baselineY := y - 2
+	top := baselineY - ascent - 2 // padding above text
+	b := img.Bounds()
+	if top < b.Min.Y {
+		shift := b.Min.Y - top
+		baselineY += shift
+		top = b.Min.Y
+	}
+	right := x + textWidth + 4
+	if right > b.Max.X {
+		right = b.Max.X
+	}
+	bgRect := image.Rect(x, top, right, top+height+4)
+	draw.Draw(img, bgRect, &image.Uniform{bg}, image.Point{}, draw.Over)
+
+	// Draw text with a small left padding
+	d.Dot = fixed.Point26_6{X: fixed.I(x + 2), Y: fixed.I(baselineY)}
+	d.DrawString(label)
 }
