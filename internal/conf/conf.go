@@ -24,6 +24,7 @@ type Config struct {
 	Prompt      string   `koanf:"prompt"`
 	Temperature string   `koanf:"temperature"`
 	TopP        string   `koanf:"topP"`
+	Schema      string   `koanf:"schema"`
 }
 
 // Init initializes the configuration from file and environment variables.

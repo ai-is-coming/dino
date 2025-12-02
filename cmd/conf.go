@@ -74,6 +74,7 @@ prompt: |
   - If no people are found, return [].
   - Output must be valid standard JSON: no comments, no trailing commas, no NaN/Infinity, and no extra keys.
   - Example output [{"label": "climb", "bbox": ["100", "200", "120", "300"]}, {"label": "person", "bbox": ["400", "220", "460", "360"]}]
+schema: '{"type":"array","items":{"type":"object","properties":{"label":{"type":"string"},"bbox":{"type":"array","items":{"type":"string"}}},"required":["label","bbox"]}}'
 `
 
 func init() {

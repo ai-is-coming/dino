@@ -199,16 +199,28 @@ var runCmd = &cobra.Command{
 						"top_p":           topP,
 					},
 				}
+
+				// Determine output format from config schema (if provided), else JSON mode
+				format := json.RawMessage(`"json"`)
+				if s := strings.TrimSpace(cfg.Schema); s != "" {
+					if json.Valid([]byte(s)) {
+						format = json.RawMessage(s)
+					} else {
+						termcolor.New(termcolor.FgYellow).Fprintln(os.Stderr, "warn: invalid schema in conf.yaml; falling back to JSON mode")
+					}
+				}
+				req.Format = format
+
 				if !stream {
 					req.Stream = new(bool)
 				}
 				var sb strings.Builder
 				respFunc := func(resp api.ChatResponse) error {
-					sb.WriteString(resp.Message.Content)
 					if stream && resp.Message.Thinking != "" {
 						termcolor.New(termcolor.FgHiWhite).Printf("%s", resp.Message.Thinking)
 					} else if resp.Message.Content != "" {
 						termcolor.New(termcolor.FgHiWhite).Printf("%s", resp.Message.Content)
+						sb.WriteString(resp.Message.Content)
 					}
 					return nil
 				}
@@ -359,6 +371,18 @@ var runCmd = &cobra.Command{
 				"top_p":       topP,
 			},
 		}
+
+		// Determine output format from config schema (if provided), else JSON mode
+		format := json.RawMessage(`"json"`)
+		if s := strings.TrimSpace(cfg.Schema); s != "" {
+			if json.Valid([]byte(s)) {
+				format = json.RawMessage(s)
+			} else {
+				termcolor.New(termcolor.FgYellow).Fprintln(os.Stderr, "warn: invalid schema in conf.yaml; falling back to JSON mode")
+			}
+		}
+		req.Format = format
+
 		if !stream {
 			req.Stream = new(bool)
 		}
