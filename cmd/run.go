@@ -267,8 +267,8 @@ var runCmd = &cobra.Command{
 
 				// Parse detections JSON
 				var dets []struct {
-					Label string   `json:"label"`
-					BBox  []string `json:"bbox"`
+					Label string `json:"label"`
+					BBox  []int  `json:"bbox"`
 				}
 				termcolor.New(termcolor.FgHiGreen).Printf("\nassistant response: %s\n", out)
 				if err := json.Unmarshal([]byte(out), &dets); err != nil {
@@ -282,17 +282,23 @@ var runCmd = &cobra.Command{
 					label := d.Label
 					x1, y1, x2, y2 := 0, 0, 0, 0
 					if isQwen3VL {
-						// Expect normalized bbox [x1, y1, x2, y2] as string array in 0..999
+						// Expect normalized bbox [x1, y1, x2, y2] in 0..999 (ints)
 						if len(d.BBox) >= 4 {
-							x1, y1, x2, y2 = utils.DenormalizeBbox999(d.BBox[0], d.BBox[1], d.BBox[2], d.BBox[3], bounds.Dx(), bounds.Dy())
+							x1, y1, x2, y2 = utils.DenormalizeBbox999(
+								strconv.Itoa(d.BBox[0]),
+								strconv.Itoa(d.BBox[1]),
+								strconv.Itoa(d.BBox[2]),
+								strconv.Itoa(d.BBox[3]),
+								bounds.Dx(), bounds.Dy(),
+							)
 						}
 					} else {
-						// Expect absolute pixel bbox as string array [x1, y1, x2, y2]
+						// Expect absolute pixel bbox as ints [x1, y1, x2, y2]
 						if len(d.BBox) >= 4 {
-							dx1, _ := decimal.NewFromString(d.BBox[0])
-							dy1, _ := decimal.NewFromString(d.BBox[1])
-							dx2, _ := decimal.NewFromString(d.BBox[2])
-							dy2, _ := decimal.NewFromString(d.BBox[3])
+							dx1 := decimal.NewFromInt(int64(d.BBox[0]))
+							dy1 := decimal.NewFromInt(int64(d.BBox[1]))
+							dx2 := decimal.NewFromInt(int64(d.BBox[2]))
+							dy2 := decimal.NewFromInt(int64(d.BBox[3]))
 							x1 = int(dx1.IntPart())
 							y1 = int(dy1.IntPart())
 							x2 = int(dx2.IntPart())
