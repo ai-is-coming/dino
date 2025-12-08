@@ -15,11 +15,18 @@ var (
 	confForce  bool
 )
 
+const (
+	confDirPerm  = 0o755
+	confFilePerm = 0o644
+)
+
 // confCmd generates a default conf.yaml in the current directory (or a specified path).
 var confCmd = &cobra.Command{
 	Use:   "conf",
 	Short: "Generate default config file to conf.yaml",
-	Long:  "Generate a default configuration file to ./conf.yaml. If the file already exists, it will not be overwritten by default; use --force to overwrite.",
+	Long: "Generate a default configuration file to ./conf.yaml. " +
+		"If the file already exists, it will not be overwritten by default; " +
+		"use --force to overwrite.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := confOutput
 		if strings.TrimSpace(out) == "" {
@@ -32,12 +39,12 @@ var confCmd = &cobra.Command{
 		}
 
 		if dir := filepath.Dir(out); dir != "." && dir != "" {
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := os.MkdirAll(dir, confDirPerm); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", dir, err)
 			}
 		}
 
-		if err := os.WriteFile(out, []byte(defaultConfYAML), 0644); err != nil {
+		if err := os.WriteFile(out, []byte(defaultConfYAML), confFilePerm); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
 		color.New(color.FgGreen).Printf("Generated default config: %s\n", out)
@@ -56,7 +63,7 @@ classes:
 - person
 - climb
 prompt: |
-  You are a concise image assistant. 
+  You are a concise image assistant.
   - You must not output any reasoning, explanation, analysis, or thinking.
   - Never reveal chain-of-thought.
   - Only output the final answer directly.
@@ -73,11 +80,13 @@ prompt: |
   - Only include detections for people. If uncertain whether someone is climbing, use "person".
   - If no people are found, return [].
   - Output must be valid standard JSON: no comments, no trailing commas, no NaN/Infinity, and no extra keys.
-  - Example output [{"label": "climb", "bbox": ["100", "200", "120", "300"]}, {"label": "person", "bbox": ["400", "220", "460", "360"]}]
-schema: '{"type":"array","items":{"type":"object","properties":{"label":{"type":"string"},"bbox":{"type":"array","items":{"type":"string"}}},"required":["label","bbox"]}}'
+` + `  - Example output [{"label": "climb", "bbox": ["100", "200", "120", "300"]}, ` +
+	`{"label": "person", "bbox": ["400", "220", "460", "360"]}]
+` + `schema: '{"type":"array","items":{"type":"object","properties":` +
+	`{"label":{"type":"string"},"bbox":{"type":"array","items":{"type":"string"}}},"required":["label","bbox"]}}'
 `
 
-func init() {
+func attachConfFlags() {
 	confCmd.Flags().StringVarP(&confOutput, "output", "o", "", "output config file path (default ./conf.yaml)")
 	confCmd.Flags().BoolVarP(&confForce, "force", "f", false, "overwrite existing config file")
 }

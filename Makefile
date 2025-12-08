@@ -14,24 +14,32 @@ VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo v
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo '')
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
+# golangci-lint version and paths
+GOLANGCI_LINT_VERSION ?= v2.6.2
+GOLANGCI_LINT_DIR ?= .tools/golangci-lint/$(GOLANGCI_LINT_VERSION)
+GOLANGCI_LINT_BIN := $(GOLANGCI_LINT_DIR)/bin/golangci-lint
+
 # ldflags to inject into the binary
 LDFLAGS := -X $(PKG).Version=$(VERSION) -X $(PKG).GitCommit=$(GIT_COMMIT) -X $(PKG).BuildTime=$(BUILD_TIME)
 
 .PHONY: init
 
 init:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v2.6.2
+	@mkdir -p $(GOLANGCI_LINT_DIR)
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_LINT_DIR)/bin $(GOLANGCI_LINT_VERSION)
 
 .PHONY: lint
 
 lint:
-	@if ! command -v golangci-lint >/dev/null 2>&1; then \
-		echo "golangci-lint not found. Install via: brew install golangci-lint or go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+	@if [ -x "$(GOLANGCI_LINT_BIN)" ]; then \
+		$(GOLANGCI_LINT_BIN) run ./...; \
+	elif command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "golangci-lint not found. Run 'make init' to install $(GOLANGCI_LINT_VERSION), or install via: brew install golangci-lint or go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
 		echo "Running basic checks (go vet, gofmt) instead..."; \
 		go vet ./...; \
 		[ -z "$$(gofmt -s -l .)" ] || (echo "Files not gofmt'd:" && gofmt -s -l . && exit 1); \
-	else \
-		golangci-lint run ./...; \
 	fi
 
 .PHONY: build

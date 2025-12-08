@@ -21,8 +21,12 @@ var rootCmd = &cobra.Command{
 	Long:  "A dino tool",
 }
 
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: ./conf.yaml or dino/conf.yaml)")
+func attachRootFlags() {
+	rootCmd.PersistentFlags().StringVarP(
+		&cfgFile,
+		"config", "c", "",
+		"config file path (default: ./conf.yaml or dino/conf.yaml)",
+	)
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 }
 
@@ -31,6 +35,12 @@ func init() {
 func Execute() {
 	// Initialize configuration before executing commands.
 	cobra.OnInitialize(initConfig)
+
+	// Configure flags without using init() to satisfy linters.
+	attachRootFlags()
+	attachRunFlags()
+	attachConfFlags()
+
 	// Register subcommands.
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(runCmd)

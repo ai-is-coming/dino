@@ -14,15 +14,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-
 	"strings"
 
 	"dino/internal/conf"
+	"dino/internal/providers"
 	"dino/internal/utils"
 
 	termcolor "github.com/fatih/color"
 	"github.com/kaptinlin/jsonrepair"
-	"github.com/ollama/ollama/api"
 	"github.com/shopspring/decimal"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +30,16 @@ var (
 	stream    bool
 	inputDir  string
 	outputDir string
+)
+
+// Common constants to avoid magic numbers in code and satisfy linters.
+const (
+	permDir       = 0o755
+	permFile      = 0o644
+	rectThickness = 3
+	bgAlpha       = 200
+	jpegQuality   = 90
+	bboxMinLen    = 4
 )
 
 // defaultPalette defines a set of distinct colors assigned to classes by order.
@@ -54,6 +63,7 @@ func colorForLabel(label string, classes []string) color.RGBA {
 	if strings.TrimSpace(label) == "" {
 		return color.RGBA{255, 255, 255, 255} // white for empty label
 	}
+
 	lower := strings.ToLower(strings.TrimSpace(label))
 	for i, c := range classes {
 		if strings.ToLower(strings.TrimSpace(c)) == lower {
@@ -89,11 +99,10 @@ var runCmd = &cobra.Command{
 			termcolor.New(termcolor.FgHiBlack).Fprintln(os.Stderr, "Set via env DINO_PROVIDER and DINO_MODEL or a config file")
 			return fmt.Errorf("missing configuration")
 		}
-		if provider != "ollama" {
-			return fmt.Errorf("unsupported provider: %s", provider)
-		}
-
-		termcolor.New(termcolor.FgGreen).Printf("provider: %s, model: %s, stream: %t, temperature: %s, top_p: %s\n", provider, model, stream, cfg.Temperature, cfg.TopP)
+		termcolor.New(termcolor.FgGreen).Printf(
+			"provider: %s, model: %s, stream: %t, temperature: %s, top_p: %s\n",
+			provider, model, stream, cfg.Temperature, cfg.TopP,
+		)
 
 		// parse temperature/top_p from string config into float64 with defaults
 		temp := 0.2
@@ -122,6 +131,11 @@ var runCmd = &cobra.Command{
 			stream = cfg.Stream
 
 		}
+		// Initialize provider via factory
+		p, err := providers.New(provider)
+		if err != nil {
+			return err
+		}
 
 		// Batch image mode if an input directory is provided
 		if effInput != "" {
@@ -133,23 +147,18 @@ var runCmd = &cobra.Command{
 			if effOutput == "" {
 				effOutput = "outputs"
 			}
-			if err := os.MkdirAll(effOutput, 0o755); err != nil {
+			if err := os.MkdirAll(effOutput, permDir); err != nil {
 				return fmt.Errorf("create output dir: %w", err)
 			}
 			// also create subdir for annotated bbox outputs
 			bboxDir := filepath.Join(effOutput, "bbox")
-			if err := os.MkdirAll(bboxDir, 0o755); err != nil {
+			if err := os.MkdirAll(bboxDir, permDir); err != nil {
 				return fmt.Errorf("create bbox output dir: %w", err)
 			}
 			// also create subdir for raw json outputs
 			jsonDir := filepath.Join(effOutput, "json")
-			if err := os.MkdirAll(jsonDir, 0o755); err != nil {
+			if err := os.MkdirAll(jsonDir, permDir); err != nil {
 				return fmt.Errorf("create json output dir: %w", err)
-			}
-
-			client, err := api.ClientFromEnvironment()
-			if err != nil {
-				return err
 			}
 
 			entries, err := os.ReadDir(effInput)
@@ -184,20 +193,8 @@ var runCmd = &cobra.Command{
 				imgBytes, err := os.ReadFile(absImgPath)
 				if err != nil {
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "skip %s: read image: %v\n", absImgPath, err)
-					continue
-				}
 
-				req := &api.ChatRequest{
-					Model: model,
-					Messages: []api.Message{
-						{Role: "user", Content: currentPrompt, Images: []api.ImageData{api.ImageData(imgBytes)}},
-					},
-					Think: &api.ThinkValue{Value: false},
-					Options: map[string]any{
-						"enable_thinking": false,
-						"temperature":     temp,
-						"top_p":           topP,
-					},
+					continue
 				}
 
 				// Determine output format from config schema (if provided), else JSON mode
@@ -206,26 +203,36 @@ var runCmd = &cobra.Command{
 					if json.Valid([]byte(s)) {
 						format = json.RawMessage(s)
 					} else {
-						termcolor.New(termcolor.FgYellow).Fprintln(os.Stderr, "warn: invalid schema in conf.yaml; falling back to JSON mode")
+						termcolor.New(termcolor.FgYellow).Fprintln(
+							os.Stderr,
+							"warn: invalid schema in conf.yaml; falling back to JSON mode",
+						)
 					}
 				}
-				req.Format = format
 
-				if !stream {
-					req.Stream = new(bool)
-				}
+				// Build chat options using functional options
 				var sb strings.Builder
-				respFunc := func(resp api.ChatResponse) error {
-					if stream && resp.Message.Thinking != "" {
-						termcolor.New(termcolor.FgHiWhite).Printf("%s", resp.Message.Thinking)
-					} else if resp.Message.Content != "" {
-						termcolor.New(termcolor.FgHiWhite).Printf("%s", resp.Message.Content)
-						sb.WriteString(resp.Message.Content)
-					}
-					return nil
-				}
-				if err := client.Chat(ctx, req, respFunc); err != nil {
+				opts := providers.NewChatOptions(
+					model, currentPrompt,
+					providers.WithStream(stream),
+					providers.WithTemperature(temp),
+					providers.WithTopP(topP),
+					providers.WithImages(imgBytes),
+					providers.WithFormat(format),
+					providers.WithOnDelta(func(content, thinking string) error {
+						if stream && thinking != "" {
+							termcolor.New(termcolor.FgHiWhite).Printf("%s", thinking)
+						} else if content != "" {
+							termcolor.New(termcolor.FgHiWhite).Printf("%s", content)
+							sb.WriteString(content)
+						}
+						return nil
+					}),
+				)
+
+				if err := p.Chat(ctx, opts); err != nil {
 					termcolor.New(termcolor.FgRed).Fprintf(os.Stderr, "error generating for %s: %v\n", imgPath, err)
+
 					continue
 				}
 
@@ -244,7 +251,7 @@ var runCmd = &cobra.Command{
 
 				// Save raw JSON output alongside results
 				jsonPath := filepath.Join(jsonDir, name+".json")
-				if err := os.WriteFile(jsonPath, []byte(out), 0o644); err != nil {
+				if err := os.WriteFile(jsonPath, []byte(out), permFile); err != nil {
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "warn %s: write json: %v\n", base, err)
 				}
 
@@ -259,6 +266,7 @@ var runCmd = &cobra.Command{
 				_ = imgFile.Close()
 				if err != nil {
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "skip %s: decode image: %v\n", base, err)
+
 					continue
 				}
 				bounds := img.Bounds()
@@ -273,6 +281,7 @@ var runCmd = &cobra.Command{
 				termcolor.New(termcolor.FgHiGreen).Printf("\nassistant response: %s\n", out)
 				if err := json.Unmarshal([]byte(out), &dets); err != nil {
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "skip %s: parse json: %v\n", base, err)
+
 					continue
 				}
 
@@ -283,7 +292,7 @@ var runCmd = &cobra.Command{
 					x1, y1, x2, y2 := 0, 0, 0, 0
 					if isQwen3VL {
 						// Expect normalized bbox [x1, y1, x2, y2] in 0..999 (ints)
-						if len(d.BBox) >= 4 {
+						if len(d.BBox) >= bboxMinLen {
 							x1, y1, x2, y2 = utils.DenormalizeBbox999(
 								strconv.Itoa(d.BBox[0]),
 								strconv.Itoa(d.BBox[1]),
@@ -294,7 +303,7 @@ var runCmd = &cobra.Command{
 						}
 					} else {
 						// Expect absolute pixel bbox as ints [x1, y1, x2, y2]
-						if len(d.BBox) >= 4 {
+						if len(d.BBox) >= bboxMinLen {
 							dx1 := decimal.NewFromInt(int64(d.BBox[0]))
 							dy1 := decimal.NewFromInt(int64(d.BBox[1]))
 							dx2 := decimal.NewFromInt(int64(d.BBox[2]))
@@ -319,9 +328,9 @@ var runCmd = &cobra.Command{
 					y2 = utils.Clamp(y2, bounds.Min.Y, bounds.Max.Y-1)
 
 					col := colorForLabel(label, cfg.Classes)
-					utils.DrawRect(dst, x1, y1, x2, y2, col, 3)
+					utils.DrawRect(dst, x1, y1, x2, y2, col, rectThickness)
 					// draw label text on a colored background near the top-left corner of the box
-					bg := color.RGBA{R: col.R, G: col.G, B: col.B, A: 200}
+					bg := color.RGBA{R: col.R, G: col.G, B: col.B, A: bgAlpha}
 					utils.DrawLabel(dst, x1, y1, label, color.RGBA{255, 255, 255, 255}, bg)
 				}
 
@@ -330,11 +339,12 @@ var runCmd = &cobra.Command{
 				outFile, err := os.Create(outImgPath)
 				if err != nil {
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "skip %s: create out: %v\n", base, err)
+
 					continue
 				}
 				switch strings.ToLower(ext) {
 				case ".jpg", ".jpeg":
-					_ = jpeg.Encode(outFile, dst, &jpeg.Options{Quality: 90})
+					_ = jpeg.Encode(outFile, dst, &jpeg.Options{Quality: jpegQuality})
 				case ".png":
 					_ = png.Encode(outFile, dst)
 				default:
@@ -362,62 +372,64 @@ var runCmd = &cobra.Command{
 		termcolor.New(termcolor.FgCyan).Fprintln(os.Stderr, "prompt:")
 		fmt.Fprintln(os.Stderr, prompt)
 
-		client, err := api.ClientFromEnvironment()
-		if err != nil {
-			return err
-		}
-
-		req := &api.ChatRequest{
-			Model: model,
-			Messages: []api.Message{
-				{Role: "user", Content: prompt},
-			},
-			Options: map[string]any{
-				"temperature": temp,
-				"top_p":       topP,
-			},
-		}
-
 		// Determine output format from config schema (if provided), else JSON mode
 		format := json.RawMessage(`"json"`)
 		if s := strings.TrimSpace(cfg.Schema); s != "" {
 			if json.Valid([]byte(s)) {
 				format = json.RawMessage(s)
 			} else {
-				termcolor.New(termcolor.FgYellow).Fprintln(os.Stderr, "warn: invalid schema in conf.yaml; falling back to JSON mode")
+				termcolor.New(termcolor.FgYellow).Fprintln(
+					os.Stderr,
+					"warn: invalid schema in conf.yaml; falling back to JSON mode",
+				)
 			}
-		}
-		req.Format = format
-
-		if !stream {
-			req.Stream = new(bool)
 		}
 
 		ctx := context.Background()
 		if stream {
-			respFunc := func(resp api.ChatResponse) error {
-				fmt.Print(resp.Message.Content)
-				return nil
-			}
-			if err := client.Chat(ctx, req, respFunc); err != nil {
+			// Build chat options with streaming callback via functional option
+			opts := providers.NewChatOptions(
+				model, prompt,
+				providers.WithStream(true),
+				providers.WithTemperature(temp),
+				providers.WithTopP(topP),
+				providers.WithFormat(format),
+				providers.WithOnDelta(func(content, thinking string) error {
+					if content != "" {
+						fmt.Print(content)
+					}
+					return nil
+				}),
+			)
+			if err := p.Chat(ctx, opts); err != nil {
 				return err
 			}
 			fmt.Println()
 			return nil
 		}
 
-		respFunc := func(resp api.ChatResponse) error {
-			fmt.Println(resp.Message.Content)
-			return nil
-		}
-		if err := client.Chat(ctx, req, respFunc); err != nil {
+		// Non-streaming: print the final content with newline
+		opts := providers.NewChatOptions(
+			model, prompt,
+			providers.WithStream(false),
+			providers.WithTemperature(temp),
+			providers.WithTopP(topP),
+			providers.WithFormat(format),
+			providers.WithOnDelta(func(content, thinking string) error {
+				if content != "" {
+					fmt.Println(content)
+				}
+				return nil
+			}),
+		)
+		if err := p.Chat(ctx, opts); err != nil {
 			return err
 		}
 		return nil
 	},
 }
 
-func init() {
+func attachRunFlags() {
 	runCmd.Flags().BoolVar(&stream, "stream", true, "stream responses (ollama)")
 	runCmd.Flags().StringVarP(&inputDir, "input", "i", "", "input folder containing images")
 	runCmd.Flags().StringVarP(&outputDir, "output", "o", "", "output folder to save results")
@@ -431,6 +443,7 @@ func buildPrompt(args []string) (string, error) {
 	fi, err := os.Stdin.Stat()
 	if err == nil && (fi.Mode()&os.ModeCharDevice) == 0 {
 		b, _ := io.ReadAll(os.Stdin)
+
 		s := strings.TrimSpace(string(b))
 		if s != "" {
 			return s, nil

@@ -6,6 +6,12 @@ run:
 
 issues:
   max-same-issues: 0
+  exclude:
+    - "too many lines above return"
+  exclude-rules:
+    - linters:
+        - wsl_v5
+      text: "too many lines above return"
 
 linters:
   default: fast
@@ -14,8 +20,11 @@ linters:
   disable:
     - wsl
     - depguard
+    - nlreturn
   settings:
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false
       branch-max-lines: 2
+      disable:
+        - return

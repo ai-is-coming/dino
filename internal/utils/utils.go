@@ -13,11 +13,19 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+const (
+	bboxScaleMax      = 1000
+	labelPadding      = 2
+	labelRightPadding = 4
+	labelBgPadding    = 4
+)
+
 // Clamp bounds v into [lo, hi].
 func Clamp(v, lo, hi int) int {
 	if v < lo {
 		return lo
 	}
+
 	if v > hi {
 		return hi
 	}
@@ -27,12 +35,15 @@ func Clamp(v, lo, hi int) int {
 // DrawRect draws a rectangle outline with a given thickness and color on an RGBA image.
 func DrawRect(img *image.RGBA, x1, y1, x2, y2 int, c color.Color, thickness int) {
 	b := img.Bounds()
+
 	set := func(x, y int) {
 		if x < b.Min.X || x >= b.Max.X || y < b.Min.Y || y >= b.Max.Y {
 			return
 		}
+
 		img.Set(x, y, c)
 	}
+
 	for t := 0; t < thickness; t++ {
 		// top & bottom
 		for x := x1; x <= x2; x++ {
@@ -69,7 +80,7 @@ func DenormalizeBbox999(x1s, y1s, x2s, y2s string, width, height int) (int, int,
 	fy2, _ := decimal.NewFromString(y2s)
 	dw := decimal.NewFromInt(int64(width))
 	dh := decimal.NewFromInt(int64(height))
-	thousand := decimal.NewFromInt(1000)
+	thousand := decimal.NewFromInt(bboxScaleMax)
 
 	x1 := int(fx1.Mul(dw).Div(thousand).IntPart())
 	y1 := int(fy1.Mul(dh).Div(thousand).IntPart())
@@ -80,6 +91,7 @@ func DenormalizeBbox999(x1s, y1s, x2s, y2s string, width, height int) (int, int,
 	if x1 > x2 {
 		x1, x2 = x2, x1
 	}
+
 	if y1 > y2 {
 		y1, y2 = y2, y1
 	}
@@ -88,6 +100,7 @@ func DenormalizeBbox999(x1s, y1s, x2s, y2s string, width, height int) (int, int,
 	if maxX < 0 {
 		maxX = 0
 	}
+
 	maxY := height - 1
 	if maxY < 0 {
 		maxY = 0
@@ -121,22 +134,25 @@ func DrawLabel(img *image.RGBA, x, y int, label string, fg color.Color, bg color
 	height := m.Height.Ceil()
 
 	// Place background rectangle just above the top edge of the bbox.
-	baselineY := y - 2
-	top := baselineY - ascent - 2 // padding above text
+	baselineY := y - labelPadding
+	top := baselineY - ascent - labelPadding // padding above text
+
 	b := img.Bounds()
 	if top < b.Min.Y {
 		shift := b.Min.Y - top
 		baselineY += shift
 		top = b.Min.Y
 	}
-	right := x + textWidth + 4
+
+	right := x + textWidth + labelRightPadding
 	if right > b.Max.X {
 		right = b.Max.X
 	}
-	bgRect := image.Rect(x, top, right, top+height+4)
+
+	bgRect := image.Rect(x, top, right, top+height+labelBgPadding)
 	draw.Draw(img, bgRect, &image.Uniform{bg}, image.Point{}, draw.Over)
 
 	// Draw text with a small left padding
-	d.Dot = fixed.Point26_6{X: fixed.I(x + 2), Y: fixed.I(baselineY)}
+	d.Dot = fixed.Point26_6{X: fixed.I(x + labelPadding), Y: fixed.I(baselineY)}
 	d.DrawString(label)
 }
