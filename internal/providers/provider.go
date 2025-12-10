@@ -13,13 +13,22 @@ type Provider interface {
 	Chat(ctx context.Context, opts ChatOptions) error
 }
 
+// ProviderConfig contains common configuration for all providers.
+type ProviderConfig struct {
+	APIKey   string
+	BaseURL  string
+	AuthType string // "api_key" (default) or "auth_token"
+}
+
 // New returns a Provider implementation based on the given name.
-// Currently supports: "ollama". You can extend this switch to add more providers.
-func New(name string) (Provider, error) {
+// Currently supports: "ollama", "claude". You can extend this switch to add more providers.
+func New(name string, cfg ProviderConfig) (Provider, error) {
 	s := strings.ToLower(strings.TrimSpace(name))
 	switch s {
 	case "", "ollama":
 		return NewOllamaFromEnv()
+	case "claude", "anthropic":
+		return NewClaude(cfg.APIKey, cfg.BaseURL, cfg.AuthType)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", name)
 	}

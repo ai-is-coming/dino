@@ -25,6 +25,9 @@ type Config struct {
 	Temperature string   `koanf:"temperature"`
 	TopP        string   `koanf:"topP"`
 	Schema      string   `koanf:"schema"`
+	APIKey      string   `koanf:"apiKey"`
+	BaseURL     string   `koanf:"baseURL"`
+	AuthType    string   `koanf:"authType"` // "api_key" (default) or "auth_token"
 }
 
 // Init initializes the configuration from file and environment variables.

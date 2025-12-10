@@ -132,7 +132,11 @@ var runCmd = &cobra.Command{
 
 		}
 		// Initialize provider via factory
-		p, err := providers.New(provider)
+		p, err := providers.New(provider, providers.ProviderConfig{
+			APIKey:   cfg.APIKey,
+			BaseURL:  cfg.BaseURL,
+			AuthType: cfg.AuthType,
+		})
 		if err != nil {
 			return err
 		}

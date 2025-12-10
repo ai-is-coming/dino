@@ -54,6 +54,9 @@ var confCmd = &cobra.Command{
 
 const defaultConfYAML = `provider: ollama
 model: qwen3-vl:32b
+# apiKey: your-api-key-here  # Required for claude provider, optional for ollama
+# baseURL: https://api.anthropic.com  # Optional: custom API endpoint
+# authType: api_key  # api_key (X-Api-Key header) or auth_token (Bearer token)
 temperature: 0.6
 topP: 0.95
 stream: true

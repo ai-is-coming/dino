@@ -1,5 +1,8 @@
-provider: ollama
-model: qwen3-vl:32b
+provider: claude
+model: 'claude-sonnet-4-5-20250929'
+apiKey: 'your-api-key-here'
+baseURL: 'your-api-endpoint-here'
+authType: auth_token  # api_key (X-Api-Key header) or auth_token (Bearer token)
 temperature: 0.6
 topP: 0.95
 stream: true
@@ -13,7 +16,7 @@ prompt: |
   - You must not output any reasoning, explanation, analysis, or thinking.
   - Never reveal chain-of-thought.
   - Only output the final answer directly.
-  - If the user asks “why” or “how”, still respond as briefly as possible without revealing reasoning.
+  - If the user asks "why" or "how", still respond as briefly as possible without revealing reasoning.
   - Keep answers short and direct.
 
   Analyze the image and detect only people (humans). Ignore all non-person objects.
