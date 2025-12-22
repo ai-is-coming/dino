@@ -1,0 +1,33 @@
+provider: gemini
+model: 'gemini-3-pro-preview'
+apiKey: 'your-api-key-here'
+baseURL: 'your-api-endpoint-here'
+# Disable response_format for APIs that don't support it (e.g., some proxies/gateways)
+noResponseFormat: false
+temperature: 0.6
+topP: 0.95
+stream: true
+input: 'inputs'
+output: 'outputs'
+# Bbox scale for models that return normalized coordinates (e.g., qwen3-vl uses 1000)
+# Set to 0 or omit for models that return absolute pixel coordinates
+bboxScale: 1000
+classes:
+- person
+- climb
+systemPrompt: |
+  You are a concise image assistant.
+  Do not rotate or transform the image orientation.
+prompt: |
+  Analyze the image and detect only people (humans). Ignore all non-person objects.
+  Output only a single valid JSON string and nothing else (no extra text, no code fences).
+  Strictly follow these rules:
+  - Return a single JSON array of detections (not wrapped in an object).
+  - Each detection must include:
+    - label: "person" for normal people; "climb" for people who are climbing
+    - bbox: pixel coordinates ["x1", "y1", "x2", "y2"] as integers
+  - Only include detections for people. If uncertain whether someone is climbing, use "person".
+  - If no people are found, return [].
+  - Output must be valid standard JSON: no comments, no trailing commas, no NaN/Infinity, and no extra keys.
+  - Example output [{"label": "climb", "bbox": [100, 200, 120, 300]}, {"label": "person", "bbox": [400, 220, 460, 360]}]
+schema: '{"type":"array","items":{"type":"object","properties":{"label":{"type":"string"},"bbox":{"type":"array","items":{"type":"number"}}},"required":["label","bbox"]}}'
