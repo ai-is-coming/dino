@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"dino/internal/conf"
 	"fmt"
+
+	"github.com/ai-is-coming/dino/internal/conf"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"

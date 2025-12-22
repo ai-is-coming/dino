@@ -3,7 +3,7 @@ package utils_test
 import (
 	"testing"
 
-	"dino/internal/utils"
+	"github.com/ai-is-coming/dino/internal/utils"
 )
 
 func TestDenormalizeBbox_BasicSquare(t *testing.T) {

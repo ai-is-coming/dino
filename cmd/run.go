@@ -17,9 +17,9 @@ import (
 	"strconv"
 	"strings"
 
-	"dino/internal/conf"
-	"dino/internal/providers"
-	"dino/internal/utils"
+	"github.com/ai-is-coming/dino/internal/conf"
+	"github.com/ai-is-coming/dino/internal/providers"
+	"github.com/ai-is-coming/dino/internal/utils"
 
 	termcolor "github.com/fatih/color"
 	"github.com/kaptinlin/jsonrepair"

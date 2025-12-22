@@ -3,7 +3,7 @@ package cmd
 import (
 	"os"
 
-	"dino/internal/conf"
+	"github.com/ai-is-coming/dino/internal/conf"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
