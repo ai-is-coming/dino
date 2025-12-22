@@ -1,4 +1,4 @@
-module dino
+module github.com/ai-is-coming/dino
 
 go 1.25
 
