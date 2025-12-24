@@ -169,7 +169,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		// Batch image mode if an input directory is provided
+		// Batch image mode if an input path is provided
 		if effInput != "" {
 			prompt := strings.TrimSpace(cfg.Prompt)
 			if prompt == "" {
@@ -193,21 +193,42 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("create json output dir: %w", err)
 			}
 
-			entries, err := os.ReadDir(effInput)
-			if err != nil {
-				return fmt.Errorf("read input dir: %w", err)
-			}
+			// Accept both a directory or a single file path for input
 			var imgs []string
-			for _, de := range entries {
-				if de.IsDir() {
-					continue
+			if fi, err := os.Stat(effInput); err == nil {
+				if !fi.IsDir() {
+					// Single file input
+					if utils.IsImageFile(effInput) {
+						imgs = []string{effInput}
+					}
+				} else {
+					// Directory input
+					entries, err := os.ReadDir(effInput)
+					if err != nil {
+						return fmt.Errorf("read input dir: %w", err)
+					}
+					for _, de := range entries {
+						if de.IsDir() {
+							continue
+						}
+						p := filepath.Join(effInput, de.Name())
+						if utils.IsImageFile(p) {
+							imgs = append(imgs, p)
+						}
+					}
+					sort.Strings(imgs)
 				}
-				p := filepath.Join(effInput, de.Name())
-				if utils.IsImageFile(p) {
-					imgs = append(imgs, p)
+			} else {
+				// Fallback: if Stat failed but the input looks like an image file,
+				// try treating it as a single image path. This helps on filesystems
+				// with unicode normalization quirks where Stat may fail but the
+				// underlying path is still accessible via ReadFile/open.
+				if utils.IsImageFile(effInput) {
+					imgs = []string{effInput}
+				} else {
+					return fmt.Errorf("stat input: %w", err)
 				}
 			}
-			sort.Strings(imgs)
 			if len(imgs) == 0 {
 				return fmt.Errorf("no images found in %s", effInput)
 			}
