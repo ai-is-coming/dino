@@ -21,6 +21,7 @@ type Config struct {
 	Input            string   `koanf:"input"`
 	Output           string   `koanf:"output"`
 	Classes          []string `koanf:"classes"`
+	Colors           []string `koanf:"colors"`
 	Prompt           string   `koanf:"prompt"`
 	SystemPrompt     string   `koanf:"systemPrompt"`
 	NoResponseFormat bool     `koanf:"noResponseFormat"`

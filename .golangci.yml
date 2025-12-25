@@ -21,6 +21,7 @@ linters:
     - wsl
     - depguard
     - nlreturn
+    - mnd
   settings:
     funlen:
       lines: 120

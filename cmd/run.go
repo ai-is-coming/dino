@@ -48,40 +48,178 @@ const (
 	bboxMinLen    = 4
 )
 
-// defaultPalette defines a set of distinct colors assigned to classes by order.
-var defaultPalette = []color.RGBA{
-	{0, 255, 0, 255},     // green
-	{255, 0, 0, 255},     // red
-	{0, 0, 255, 255},     // blue
-	{255, 255, 0, 255},   // yellow
-	{255, 0, 255, 255},   // magenta
-	{0, 255, 255, 255},   // cyan
-	{255, 165, 0, 255},   // orange
-	{128, 0, 128, 255},   // purple
-	{255, 105, 180, 255}, // pink
-	{0, 128, 0, 255},     // dark green
+// defaultColorsHex defines a strong-contrast palette. It will be used to cycle-fill
+// when user-provided colors are missing or shorter than classes.
+var defaultColorsHex = []string{
+	"#00FF00",
+	"#FF0000",
+	"#0000FF",
+	"#FFD700",
+	"#800080",
+	"#00FFFF",
+	"#FF69B4",
+	"#008080",
+	"#FFA500",
+	"#4B0082",
+	"#ADFF2F",
+	"#A52A2A",
+	"#1E90FF",
+	"#DC143C",
+	"#7FFFD4",
+	"#8B4513",
+	"#4682B4",
+	"#FF4500",
+	"#708090",
+	"#D2691E",
 }
 
-// colorForLabel returns a deterministic color for a given label.
-// - If the label exists in cfg.Classes (case-insensitive), color is assigned by its index.
-// - Otherwise, a stable hash of the label selects a color from the palette.
-func colorForLabel(label string, classes []string) color.RGBA {
+// namedColors provides a small set of CSS-like color names for convenience.
+var namedColors = map[string]color.RGBA{
+	"red":       {255, 0, 0, 255},
+	"green":     {0, 255, 0, 255},
+	"blue":      {0, 0, 255, 255},
+	"yellow":    {255, 255, 0, 255},
+	"magenta":   {255, 0, 255, 255},
+	"cyan":      {0, 255, 255, 255},
+	"orange":    {255, 165, 0, 255},
+	"purple":    {128, 0, 128, 255},
+	"pink":      {255, 105, 180, 255},
+	"white":     {255, 255, 255, 255},
+	"black":     {0, 0, 0, 255},
+	"darkgreen": {0, 128, 0, 255},
+}
+
+// parseHexColor parses strings like "#RRGGBB", "#RRGGBBAA", or "RRGGBB" into color.RGBA.
+func parseHexColor(s string) (color.RGBA, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return color.RGBA{}, false
+	}
+
+	s = strings.TrimPrefix(s, "#")
+
+	if len(s) != 6 && len(s) != 8 {
+		return color.RGBA{}, false
+	}
+	// helper to parse two hex digits
+	hexToByte := func(h string) (byte, bool) {
+		var v uint64
+		// manual parse to avoid importing strconv for ParseUint with base 16? We already import strconv, use it.
+		val, err := strconv.ParseUint(h, 16, 8)
+		if err != nil {
+			return 0, false
+		}
+
+		v = val
+		return byte(v), true
+	}
+
+	r, ok := hexToByte(s[0:2])
+	if !ok {
+		return color.RGBA{}, false
+	}
+
+	g, ok := hexToByte(s[2:4])
+	if !ok {
+		return color.RGBA{}, false
+	}
+
+	b, ok := hexToByte(s[4:6])
+	if !ok {
+		return color.RGBA{}, false
+	}
+
+	a := byte(255)
+	if len(s) == 8 {
+		a, ok = hexToByte(s[6:8])
+		if !ok {
+			return color.RGBA{}, false
+		}
+	}
+	return color.RGBA{R: r, G: g, B: b, A: a}, true
+}
+
+// colorFromColorsAt tries to resolve a color from the user-provided colors slice at index i.
+// It supports hex (with optional leading '#') and a small set of named colors.
+func colorFromColorsAt(colors []string, i int) (color.RGBA, bool) {
+	if colors == nil || i < 0 || i >= len(colors) {
+		return color.RGBA{}, false
+	}
+
+	v := strings.TrimSpace(colors[i])
+	if clr, ok := parseHexColor(v); ok {
+		return clr, true
+	}
+
+	if nc, ok := namedColors[strings.ToLower(v)]; ok {
+		return nc, true
+	}
+	return color.RGBA{}, false
+}
+
+// colorFromPaletteIndex returns a color from the default palette using index i (cycled).
+func colorFromPaletteIndex(i int) (color.RGBA, bool) {
+	n := len(defaultColorsHex)
+	if n == 0 {
+		return color.RGBA{}, false
+	}
+
+	if clr, ok := parseHexColor(defaultColorsHex[i%n]); ok {
+		return clr, true
+	}
+	return color.RGBA{}, false
+}
+
+// colorFromPaletteHash returns a color from the default palette based on a stable hash of s.
+func colorFromPaletteHash(s string) (color.RGBA, bool) {
+	n := len(defaultColorsHex)
+	if n == 0 {
+		return color.RGBA{}, false
+	}
+
+	sum := 0
+	for i := 0; i < len(s); i++ {
+		sum += int(s[i])
+	}
+
+	if clr, ok := parseHexColor(defaultColorsHex[sum%n]); ok {
+		return clr, true
+	}
+	return color.RGBA{}, false
+}
+
+// colorForLabel returns color for label by aligning colors[] with classes[] index.
+//   - If label exists in classes, pick colors[index] when available; if missing/invalid,
+//     fall back to defaultColorsHex cycling by index.
+//   - If label not in classes, fall back to a stable hash index into defaultColorsHex.
+func colorForLabel(label string, classes []string, colors []string) color.RGBA {
 	if strings.TrimSpace(label) == "" {
-		return color.RGBA{255, 255, 255, 255} // white for empty label
+		return color.RGBA{255, 255, 255, 255}
 	}
 
 	lower := strings.ToLower(strings.TrimSpace(label))
+
+	// 1) class-index mapping with user colors (array) and default cycle fill
 	for i, c := range classes {
-		if strings.ToLower(strings.TrimSpace(c)) == lower {
-			return defaultPalette[i%len(defaultPalette)]
+		if strings.ToLower(strings.TrimSpace(c)) != lower {
+			continue
 		}
+
+		if clr, ok := colorFromColorsAt(colors, i); ok {
+			return clr
+		}
+
+		if clr, ok := colorFromPaletteIndex(i); ok {
+			return clr
+		}
+		return color.RGBA{255, 255, 255, 255}
 	}
-	// fallback: stable hash by summing bytes, deterministic across runs
-	sum := 0
-	for i := 0; i < len(lower); i++ {
-		sum += int(lower[i])
+
+	// 2) fallback for unknown label: stable hash into default palette
+	if clr, ok := colorFromPaletteHash(lower); ok {
+		return clr
 	}
-	return defaultPalette[sum%len(defaultPalette)]
+	return color.RGBA{255, 255, 255, 255}
 }
 
 // runCmd proxies to the configured provider. For provider=ollama, it calls the Ollama HTTP API
@@ -313,11 +451,8 @@ var runCmd = &cobra.Command{
 				ext := filepath.Ext(base)
 				name := strings.TrimSuffix(base, ext)
 
-				// Save raw JSON output alongside results
+				// Prepare JSON output path (we will write scaled bbox JSON later)
 				jsonPath := filepath.Join(jsonDir, name+".json")
-				if err := os.WriteFile(jsonPath, []byte(out), permFile); err != nil {
-					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "warn %s: write json: %v\n", base, err)
-				}
 
 				// Load and prepare image for drawing
 				imgFile, err := os.Open(imgPath)
@@ -344,17 +479,26 @@ var runCmd = &cobra.Command{
 				}
 				termcolor.New(termcolor.FgHiGreen).Printf("\nassistant response: %s\n", out)
 				if err := json.Unmarshal([]byte(out), &dets); err != nil {
+					// Ensure downstream can read a valid JSON file even if model output is invalid
+					_ = os.WriteFile(jsonPath, []byte("[]"), permFile)
 					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "skip %s: parse json: %v\n", base, err)
 
 					continue
 				}
 
+				// Build export detections with integer, pixel-space bbox values
+				type exportDet struct {
+					Label string `json:"label"`
+					BBox  []int  `json:"bbox"`
+				}
+				exportDets := make([]exportDet, 0, len(dets))
+
 				for _, d := range dets {
 					label := d.Label
 					x1, y1, x2, y2 := 0, 0, 0, 0
-					if cfg.BboxScale > 0 {
-						// Expect normalized bbox [x1, y1, x2, y2] in 0..bboxScale (floats or ints)
-						if len(d.BBox) >= bboxMinLen {
+					if len(d.BBox) >= bboxMinLen {
+						if cfg.BboxScale > 0 {
+							// Expect normalized bbox [x1, y1, x2, y2] in 0..bboxScale (floats or ints)
 							x1, y1, x2, y2 = utils.DenormalizeBbox(
 								strconv.FormatFloat(d.BBox[0], 'f', -1, 64),
 								strconv.FormatFloat(d.BBox[1], 'f', -1, 64),
@@ -363,10 +507,8 @@ var runCmd = &cobra.Command{
 								bounds.Dx(), bounds.Dy(),
 								cfg.BboxScale,
 							)
-						}
-					} else {
-						// Expect absolute pixel bbox as floats/ints [x1, y1, x2, y2]
-						if len(d.BBox) >= bboxMinLen {
+						} else {
+							// Expect absolute pixel bbox as floats/ints [x1, y1, x2, y2]
 							dx1 := decimal.NewFromFloat(d.BBox[0])
 							dy1 := decimal.NewFromFloat(d.BBox[1])
 							dx2 := decimal.NewFromFloat(d.BBox[2])
@@ -390,11 +532,23 @@ var runCmd = &cobra.Command{
 					y1 = utils.Clamp(y1, bounds.Min.Y, bounds.Max.Y-1)
 					y2 = utils.Clamp(y2, bounds.Min.Y, bounds.Max.Y-1)
 
-					col := colorForLabel(label, cfg.Classes)
+					// Append to export list with scaled bbox
+					exportDets = append(exportDets, exportDet{Label: label, BBox: []int{x1, y1, x2, y2}})
+
+					col := colorForLabel(label, cfg.Classes, cfg.Colors)
 					utils.DrawRect(dst, x1, y1, x2, y2, col, rectThickness)
 					// draw label text on a colored background near the top-left corner of the box
 					bg := color.RGBA{R: col.R, G: col.G, B: col.B, A: bgAlpha}
 					utils.DrawLabel(dst, x1, y1, label, color.RGBA{255, 255, 255, 255}, bg)
+				}
+
+				// Save scaled JSON detections to outputs/json
+				if b, err := json.Marshal(exportDets); err == nil {
+					if err := os.WriteFile(jsonPath, b, permFile); err != nil {
+						termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "warn %s: write json: %v\n", base, err)
+					}
+				} else {
+					termcolor.New(termcolor.FgYellow).Fprintf(os.Stderr, "warn %s: marshal json: %v\n", base, err)
 				}
 
 				// Save annotated image to outputs/bbox with same base name & extension
